@@ -1,60 +1,84 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import {
   Image,
   SectionList,
-  SectionListData,
+  LayoutAnimation,
   SectionListRenderItem,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
+  Alert,
 } from 'react-native';
-import { useEffect, useState } from 'react';
-import { load } from 'utils/asyncStorage';
+import { useState } from 'react';
 import iconBank from 'assets/icon_bank.png';
 import iconGame from 'assets/icon_game.png';
 import iconPlatform from 'assets/icon_platform.png';
 import iconOther from 'assets/icon_other.png';
 import iconArrow from 'assets/icon_arrow.png';
+import { ImageSourcePropType } from 'react-native/Libraries/Image/Image';
+import AddAccount from 'components/home/addAccount';
+import { AnimationModelResult } from 'components/animationModel';
+import { load, save } from 'utils/asyncStorage';
 
-const AccountList = () => {
-  const [list, setList] = useState<AccountList>([]);
+interface AccountListProps {
+  list: AccountListType;
+  loadData: () => void;
+  showPassword: boolean;
+}
 
-  useEffect(() => {
+const AccountList = ({ list = [], loadData, showPassword }: AccountListProps) => {
+  const modelRef = useRef<AnimationModelResult>(null);
+  const [status, setStatus] = useState<AccountTypeStatus>({
+    其他: false,
+    平台: false,
+    银行卡: false,
+    游戏: false,
+  });
+
+  const deleteAccount = (account: Account) => {
     load('accountList').then((data) => {
       if (data) {
-        const arr = JSON.parse(data.trim()) as Account[];
-        if (typeof arr === typeof []) {
-          const gameList: Account[] = arr.filter((o) => o.type === '游戏') || [];
-          const platformList: Account[] = arr.filter((o) => o.type === '平台') || [];
-          const bankList: Account[] = arr.filter((o) => o.type === '银行卡') || [];
-          const otherList: Account[] = arr.filter((o) => o.type === '其他') || [];
-
-          const sectionData: AccountList = [
-            { type: '游戏', data: gameList },
-            { type: '平台', data: platformList },
-            { type: '银行卡', data: bankList },
-            { type: '其他', data: otherList },
-          ];
-          setList(sectionData);
-        }
+        const results = JSON.parse(data.trim()) as Account[];
+        const end = results.filter((o) => o.id !== account.id);
+        save('accountList', JSON.stringify(end)).then(() => {
+          loadData();
+        });
       }
     });
-  }, []);
+  };
 
   const renderItem: SectionListRenderItem<Account> = ({ item }) => {
+    if (!status[item.type]) {
+      return null;
+    }
     return (
-      <View style={styles.itemLayout}>
+      <TouchableOpacity
+        style={styles.itemLayout}
+        onPress={() => modelRef.current?.show(item)}
+        onLongPress={() => {
+          Alert.alert(`确定删除${item.type}账号吗？`, `账号名称:${item.name}\n账号ID:${item.account}`, [
+            {
+              text: '取消',
+              style: 'cancel',
+            },
+            {
+              text: '确定',
+              onPress: () => deleteAccount(item),
+            },
+          ]);
+        }}
+      >
         <Text style={styles.nameTxt}>{item.name}</Text>
         <View style={styles.accountInfo}>
           <Text style={styles.accountInfoTxt}>账号: {item.account}</Text>
-          <Text style={styles.accountInfoTxt}>密码: {item.password}</Text>
+          <Text style={styles.accountInfoTxt}>密码: {showPassword ? item.password : '●'.repeat(6)}</Text>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
-  const getUri = (type: AccountType) => {
+  const getUri = (type: AccountType): ImageSourcePropType => {
     switch (type) {
       case '游戏':
         return iconGame;
@@ -67,31 +91,54 @@ const AccountList = () => {
     }
   };
 
-  const SectionHeader = ({ section }: { section: SectionListData<Account> }) => {
+  const SectionHeader = (info: any): React.ReactElement => {
+    const { section }: { section: Account & { data: AccountListType } } = info;
+
     return (
-      <View style={styles.groupHeader}>
+      <View
+        style={[
+          styles.groupHeader,
+          (!status[section.type] || section.data.length === 0) && styles.groupHeaderBottomRadius,
+        ]}
+      >
         <Image style={styles.typeImg} source={getUri(section.type)} />
         <Text style={styles.typeTxt}>{section.type}</Text>
-        <TouchableOpacity style={styles.arrowBtn}>
-          <Image style={styles.arrowImg} source={iconArrow} />
+        <TouchableOpacity
+          style={styles.arrowBtn}
+          onPress={() => {
+            setStatus((prevState) => {
+              LayoutAnimation.easeInEaseOut();
+              return {
+                ...prevState,
+                [section.type]: !prevState[section.type],
+              };
+            });
+          }}
+        >
+          <Image
+            style={[styles.arrowImg, { transform: [{ rotate: status[section.type] ? '0deg' : '-90deg' }] }]}
+            source={iconArrow}
+          />
         </TouchableOpacity>
       </View>
     );
   };
 
   return (
-    <SectionList
-      sections={list}
-      style={styles.root} // 全局样式
-      contentContainerStyle={styles.contentWrapper} // 容器样式
-      keyExtractor={(item, index) => `${item.type}-${index}`}
-      keyboardDismissMode={'on-drag'}
-      keyboardShouldPersistTaps={'handled'} // 有点击事件就响应
-      renderItem={renderItem}
-      renderSectionHeader={SectionHeader}
-      stickySectionHeadersEnabled={true} // 分组头吸顶
-      ItemSeparatorComponent={() => <View style={styles.separator} />} // 分割线渲染组件
-    />
+    <>
+      <SectionList
+        sections={list}
+        style={styles.root} // 全局样式
+        contentContainerStyle={styles.contentWrapper} // 容器样式
+        keyExtractor={(item, index) => `${item.type}-${index}`}
+        keyboardDismissMode={'on-drag'}
+        keyboardShouldPersistTaps={'handled'} // 有点击事件就响应
+        renderItem={renderItem}
+        renderSectionHeader={SectionHeader}
+        stickySectionHeadersEnabled={true} // 分组头吸顶
+      />
+      <AddAccount ref={modelRef} onAddSave={loadData} />
+    </>
   );
 };
 
@@ -118,6 +165,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 12,
     gap: 4,
+  },
+  groupHeaderBottomRadius: {
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
   },
   typeImg: {
     width: 24,

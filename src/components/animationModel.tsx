@@ -17,11 +17,12 @@ interface AnimationModelProps extends PropsWithChildren {
   animationType?: 'none' | 'slide' | 'fade';
   duration?: number;
   useNativeDriver?: boolean;
+  onSave?: () => void;
 }
 
 export interface AnimationModelResult {
   ref: RefObject<Modal>;
-  show: () => void;
+  show: (current?: Account) => void;
   hide: () => void;
 }
 
@@ -34,6 +35,7 @@ const AnimationModel = forwardRef<AnimationModelResult, AnimationModelProps>(
       statusBarTranslucent = true,
       duration = 500,
       useNativeDriver = false,
+      onSave = () => undefined,
     },
     ref
   ) => {
@@ -59,9 +61,10 @@ const AnimationModel = forwardRef<AnimationModelResult, AnimationModelProps>(
         duration: duration,
         useNativeDriver: useNativeDriver,
       }).start(() => {
+        onSave();
         setVisible(false);
       });
-    }, [duration, marginTop, useNativeDriver]);
+    }, [duration, marginTop, onSave, useNativeDriver]);
 
     useImperativeHandle(ref, () => ({
       ref: modelRef,

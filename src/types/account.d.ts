@@ -13,4 +13,11 @@ interface AccountListItem {
   data: Account[];
 }
 
-type AccountList = AccountListItem[];
+interface AccountTypeStatus {
+  游戏: boolean;
+  平台: boolean;
+  银行卡: boolean;
+  其他: boolean;
+}
+
+type AccountListType = AccountListItem[];

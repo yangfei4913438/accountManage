@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { forwardRef, useImperativeHandle, useRef, useState } from 'react';
 import AnimationModel, { AnimationModelResult } from 'components/animationModel';
 import { Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import iconAdd from 'assets/icon_add.png';
@@ -6,13 +6,44 @@ import iconClose from 'assets/icon_close_modal.png';
 import { getUUID } from 'utils/uuid';
 import { load, save } from 'utils/asyncStorage';
 
+interface AddAccountProps {
+  onAddSave: () => void;
+}
+
 const accountTypes: AccountType[] = ['游戏', '平台', '银行卡', '其他'];
-const AddAccount = () => {
+const AddAccount = forwardRef<AnimationModelResult, AddAccountProps>(({ onAddSave }: AddAccountProps, ref) => {
   const modelRef = useRef<AnimationModelResult>(null);
   const [accountType, setAccountType] = useState<AccountType>(accountTypes[0]);
   const [accountName, setAccountName] = useState<string>('');
   const [accountId, setAccountId] = useState<string>('');
   const [password, setPassword] = useState<string>('');
+  const [editId, setEditId] = useState('');
+
+  useImperativeHandle(ref, () => ({
+    ref: modelRef.current!.ref,
+    show: show,
+    hide: modelRef.current!.hide,
+  }));
+
+  const handleSave = () => {
+    setEditId('');
+    clearData();
+    onAddSave();
+  };
+
+  const show = (current?: Account) => {
+    if (current) {
+      setEditId(current.id);
+      setAccountType(current.type);
+      setAccountName(current.name);
+      setAccountId(current.account);
+      setPassword(current.password);
+      modelRef.current?.show();
+    } else {
+      setEditId('');
+      modelRef.current?.show();
+    }
+  };
 
   const clearData = () => {
     setAccountType(accountTypes[0]);
@@ -23,7 +54,7 @@ const AddAccount = () => {
 
   const onSave = () => {
     const newAccount: Account = {
-      id: getUUID() as string,
+      id: editId ? editId : (getUUID() as string),
       type: accountType,
       name: accountName,
       account: accountId,
@@ -32,8 +63,14 @@ const AddAccount = () => {
     // 读取旧数据
     load('accountList').then((list) => {
       let accountList = list ? JSON.parse(list) : [];
-      // 新数据添加到之前的数组中
-      accountList.push(newAccount);
+      if (editId) {
+        accountList = accountList.map((o: Account) => (o.id === editId ? newAccount : o));
+        // 清空数据
+        editId && setEditId('');
+      } else {
+        // 新数据添加到之前的数组中
+        accountList.push(newAccount);
+      }
       // 将新的数据保存起来
       save('accountList', JSON.stringify(accountList)).then(() => modelRef.current?.hide());
     });
@@ -65,7 +102,7 @@ const AddAccount = () => {
 
     return (
       <View style={titleStyles.layout}>
-        <Text style={titleStyles.txt}>添加账号</Text>
+        <Text style={titleStyles.txt}>{editId ? '编辑账号' : '添加账号'}</Text>
         <TouchableOpacity style={titleStyles.closeBtn} onPress={() => modelRef.current?.hide()}>
           <Image source={iconClose} style={titleStyles.closeImg} />
         </TouchableOpacity>
@@ -259,7 +296,7 @@ const AddAccount = () => {
         <Image source={iconAdd} style={styles.addBtnImg} />
       </TouchableOpacity>
 
-      <AnimationModel ref={modelRef}>
+      <AnimationModel ref={modelRef} onSave={handleSave}>
         <View style={styles.content}>
           {renderTitle()}
           <Text style={styles.subTitle}>账号类型</Text>
@@ -276,7 +313,7 @@ const AddAccount = () => {
       </AnimationModel>
     </>
   );
-};
+});
 
 export default AddAccount;
 
